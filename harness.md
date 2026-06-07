@@ -88,7 +88,8 @@ A harness within the `.claude/` directory at the project root:
 │   ├── progress.json
 │   ├── sessions.json
 │   ├── decisions.json
-│   └── checkpoint.json
+│   ├── checkpoint.json
+│   └── agents-manifest.json
 ├── tickets/               → Individual tickets ({PREFIX}-001.json, ...)
 ├── templates/             → JSON schemas for ticket types
 │   ├── story.json
@@ -193,6 +194,180 @@ Form a mental model with these attributes (do not write this anywhere — use it
 
 ---
 
+## Phase 1.5: External Agent Selection
+
+After completing project analysis, identify and recommend agents from the external catalog that best match the project's needs. This phase is interactive — it requires user participation.
+
+### Source Catalog
+
+The agent catalog lives at `https://github.com/msitarzewski/agency-agents` and is fetched at runtime. Do NOT maintain a local copy.
+
+**API endpoints:**
+- Division listing: `https://api.github.com/repos/msitarzewski/agency-agents/contents/{division}`
+- Agent content: `https://raw.githubusercontent.com/msitarzewski/agency-agents/main/{division}/{filename}`
+- Latest commit: `https://api.github.com/repos/msitarzewski/agency-agents/commits?per_page=1&sha=main`
+
+### Step 1.5.1: Fetch Catalog Index
+
+Query the GitHub API to retrieve the list of available divisions and their agents:
+
+```
+Divisions: academic, design, engineering, finance, game-development, marketing,
+paid-media, product, project-management, sales, security, spatial-computing,
+specialized, strategy, support, testing
+```
+
+For each division, fetch the file listing to build an in-memory index of available agents (name + description from filename convention).
+
+### Step 1.5.2: Generate Recommendations
+
+Using the signals from Phase 1's analysis, map to relevant agent divisions and specific agents:
+
+**Layer 1 — Project Type Mapping:**
+
+| Detected Signal | Recommended Divisions | Priority Agents |
+|---|---|---|
+| `package.json` + React/Vue/Angular/Svelte | Engineering, Design, Testing | Frontend Developer, UI Designer, UX Architect |
+| `package.json` + Express/Fastify/NestJS | Engineering, Security, Testing | Backend Architect, API Tester, Security Engineer |
+| `Cargo.toml` / `go.mod` / `pom.xml` (backend) | Engineering, Security | Backend Architect, SRE, Database Optimizer |
+| `Dockerfile` + `docker-compose.yml` | Engineering | DevOps Automator, SRE |
+| `Podfile` / `build.gradle` / React Native | Engineering | Mobile App Builder |
+| Game engine files (`ProjectSettings/`, `project.godot`, `.uproject`) | Game Development | Game Designer, Technical Artist, Level Designer |
+| ML/AI indicators (`torch`, `tensorflow`, `*.ipynb`) | Engineering | AI Engineer, Data Engineer |
+| CMS indicators (WordPress/Drupal) | Engineering | CMS Developer |
+
+**Layer 2 — Stack-Specific Signals:**
+
+| Stack Signal | Additional Agents |
+|---|---|
+| TypeScript detected | Code Reviewer, Software Architect |
+| Python + Django/Flask | Backend Architect, Database Optimizer |
+| Infrastructure-as-Code (`*.tf`, `cdk.json`) | DevOps Automator, SRE |
+| `.github/workflows/` present | Git Workflow Master, DevOps Automator |
+| Security-sensitive deps (auth, crypto, payments) | Security Engineer, Blockchain Security Auditor |
+| Complex DB schema (many migrations) | Database Optimizer, Data Engineer |
+
+**Layer 3 — User Interview Signals (asked in Step 1.5.3):**
+
+| Question | Signal → Agents |
+|---|---|
+| "Does this project have a marketing/content component?" | Content Creator, SEO Specialist, Social Media Strategist |
+| "Is there a design system or brand guidelines?" | UI Designer, Brand Guardian |
+| "Do you need financial/billing features?" | Financial Analyst, Tax Strategist |
+| "Is this project customer-facing with support needs?" | Support Responder, Customer Service |
+| "Are there compliance/regulatory requirements?" | Legal Compliance Checker, Security Engineer |
+| "Does the project involve sales/pipeline management?" | Sales Coach, Pipeline Analyst, Deal Strategist |
+
+### Step 1.5.3: User Interview
+
+Ask the user additional questions to capture needs not detectable from code analysis. Present questions in the user's preferred language (detected from Phase 1 or asked explicitly).
+
+Questions to ask (one at a time, prefer multiple-choice):
+
+1. "What is the primary purpose of this project?" (web app, API/backend, mobile, game, data/ML, library/SDK, other)
+2. "Beyond engineering, what other areas does this project need support for?" (marketing, design, sales, finance, security, project management, none)
+3. "What is your team size?" (solo developer, small team 2-5, medium team 6-15, large team 15+)
+4. "Are there specific challenges you'd like specialized help with?" (open-ended)
+
+### Step 1.5.4: Present Recommendations
+
+Present the recommendation to the user in this format:
+
+```
+Based on project analysis:
+ - Stack: {detected from Phase 1}
+ - Architecture: {detected from Phase 1}
+ - Complexity: {detected from Phase 1}
+
+MANDATORY (always installed):
+ ✓ Agents Orchestrator — Pipeline coordination and task management
+
+RECOMMENDED (high relevance to your project):
+ 1. {Agent Name} — {one-line reason}
+ 2. {Agent Name} — {one-line reason}
+ ...
+
+SUGGESTED (moderate relevance):
+ N. {Agent Name} — {one-line reason}
+ ...
+
+Options:
+ a) Accept all recommended + suggested
+ b) Accept only recommended
+ c) Choose individually from the list
+ d) Browse additional divisions ({total} agents available across {N} divisions)
+ e) Skip external agents (use only the mandatory Orchestrator)
+```
+
+If the user chooses (d), present divisions with agent counts and allow browsing.
+
+There is **no limit** on how many agents the user can select. The system recommends, but the user decides freely.
+
+### Step 1.5.5: Conflict Detection
+
+After the user confirms their selection, analyze for conflicts between selected agents:
+
+**Conflict Types:**
+
+| Type | Description | Severity |
+|---|---|---|
+| Role collision | Two agents claim the same type of work | High |
+| Scope overlap | Agents have >40% keyword overlap in their missions | Medium |
+| Complementary | Agents are in related domains but have clear scope boundaries | Info (no action) |
+
+**Known Conflict Pairs (pre-computed):**
+
+| Agent A | Agent B | Resolution Options |
+|---|---|---|
+| Code Reviewer (external) | Reviewer (harness canonical) | Keep both (scoped), Merge, Replace canonical, Skip external |
+| Senior Developer (external) | Developer (harness canonical) | Keep both (scoped), Merge, Replace canonical, Skip external |
+| Software Architect | Backend Architect | Keep both (Architect=high-level, Backend=implementation), Choose one |
+| DevOps Automator | SRE | Keep both (DevOps=pipelines, SRE=reliability), Choose one |
+
+**Conflict Presentation Format:**
+
+```
+⚠️  POTENTIAL OVERLAP detected between selected agents:
+
+1. {Agent A} ↔ {Agent B}
+   Both handle: {overlapping responsibilities}
+   
+   Options:
+   a) Keep both — {Agent A} handles {scope A}; {Agent B} handles {scope B}
+   b) Merge — Combine strengths into one agent definition
+   c) Choose one (which?)
+   d) Skip {Agent A/B}
+   
+   Recommendation: {recommended option with reasoning}
+```
+
+Record conflict resolutions in `decisions.json` after installation.
+
+### Step 1.5.6: Confirm Selection
+
+Present the final list of agents to be installed and get explicit user approval:
+
+```
+Final agent selection ({N} agents):
+
+MANDATORY:
+ ✓ Orchestrator (from: specialized/agents-orchestrator.md)
+
+SELECTED:
+ 1. {Agent Name} (from: {division}/{filename})
+ 2. {Agent Name} (from: {division}/{filename})
+ ...
+
+Conflict resolutions applied:
+ - {Resolution summary, if any}
+
+Proceed with fetching and installing these agents? (yes/no)
+```
+
+Only proceed to Phase 2 after explicit user confirmation.
+
+---
+
 ## Phase 2: Scaffold Generation
 
 Create the directory structure and all files. Execute in this exact order.
@@ -228,13 +403,41 @@ See **Appendix E** for the complete settings.json reference.
 
 ### Step 2.4: Create Agent Definitions
 
-Generate agent files in `.claude/agents/`:
+Generate canonical agent files in `.claude/agents/`:
 
-- `.claude/agents/orchestrator.md`
 - `.claude/agents/developer.md`
 - `.claude/agents/reviewer.md`
 
 See **Appendix D** for full agent definitions.
+
+**Note:** The Orchestrator is handled in Step 2.4.1 (fetched from the external catalog). Developer and Reviewer are generated from Appendix D unless they were explicitly replaced by external agents during Phase 1.5 conflict resolution.
+
+### Step 2.4.1: Fetch and Adapt External Agents
+
+For each agent selected in Phase 1.5, fetch and adapt it into the harness:
+
+**Execution order:**
+
+1. **Fetch latest commit SHA** from `https://api.github.com/repos/msitarzewski/agency-agents/commits?per_page=1&sha=main`
+2. **Fetch the Orchestrator first** (mandatory): download from `https://raw.githubusercontent.com/msitarzewski/agency-agents/main/specialized/agents-orchestrator.md`
+3. **Fetch each selected agent**: download from `https://raw.githubusercontent.com/msitarzewski/agency-agents/main/{division}/{filename}`
+4. **Apply the Adaptation Template** (see Appendix G, section G.1) to each fetched agent
+5. **Write adapted agents** to `.claude/agents/{slug}.md`
+6. **Create agents-manifest.json** at `.claude/state/agents-manifest.json` (see Appendix B for schema)
+
+**File naming convention:** `{slugified-agent-name}.md` (e.g., `frontend-developer.md`, `devops-automator.md`)
+
+**Orchestrator special handling:**
+- The adapted external Orchestrator is written to `.claude/agents/orchestrator.md`
+- If a user-customized orchestrator.md already exists, back it up to `.claude/agents/orchestrator.md.backup` and inform the user
+- The Orchestrator's "Available Specialist Agents" section is populated with the list of actually-installed agents (not the full catalog)
+- Replace references to `project-tasks/` or `project-specs/` with `.claude/tickets/` and acceptance criteria
+- Map its pipeline phases to the harness's Developer → Reviewer cycle
+
+**Network failure handling:** If GitHub is unreachable during this step, inform the user and offer:
+- a) Retry fetching
+- b) Skip external agents, proceed with canonical agents only (can add externals later)
+- c) Provide a local path to a cloned copy of the repository
 
 ### Step 2.5: Create State Files
 
@@ -336,6 +539,23 @@ Manual reads (when you need deeper context):
 - Include ticket key: `feat(auth): implement JWT refresh [{PREFIX}-001]`
 - Never commit secrets, credentials, or environment files
 - Each commit should be atomic and reviewable in isolation
+
+## Installed Agents
+
+All agents listed below operate under the protocols defined in this file (Autonomy Model, Context Handoff, Commit Discipline, Verification).
+
+### Mandatory
+- **Orchestrator** — Pipeline coordination, task decomposition, quality gates (source: agency-agents catalog)
+
+### Project Agents
+{For each agent installed from Phase 1.5, list:}
+- **{Agent Name}** — {one-line description} (division: {division})
+
+### Canonical (harness-defined)
+- **Developer** — Implementation within approved plans
+- **Reviewer** — Independent verification with clean context
+
+> Protocol adherence is enforced globally via this CLAUDE.md file. Individual agent files contain their specialized personality and expertise but inherit all operational protocols from here.
 
 ## User Preferences
 {Generated from interactive interview — see section 3.7}
@@ -490,12 +710,13 @@ After generating all files, perform these checks:
 ### 4.1: Structure Verification
 
 Confirm all expected files exist:
-- [ ] `.claude/state/` directory exists with all 4 JSON files
+- [ ] `.claude/state/` directory exists with all 4 JSON files + `agents-manifest.json`
 - [ ] `.claude/hooks/` directory exists with all 4 scripts (and they are executable)
 - [ ] `.claude/agents/` contains orchestrator.md, developer.md, reviewer.md
+- [ ] `.claude/agents/` contains all external agents selected in Phase 1.5
 - [ ] `.claude/templates/` contains story.json, bug.json, task.json, spike.json
 - [ ] `.claude/settings.json` exists with hooks configuration
-- [ ] `.claude/CLAUDE.md` contains bootstrap and user preferences sections
+- [ ] `.claude/CLAUDE.md` contains bootstrap, installed agents, and user preferences sections
 
 ### 4.2: Content Verification
 
@@ -519,6 +740,11 @@ Simulate the SessionStart hook:
 - [ ] Reviewer agent references the Verification Protocol
 - [ ] No references to `.harness/` exist anywhere
 - [ ] No references to Markdown-based state files (sessions.md, progress.md, decisions.md)
+- [ ] No external agent files contain YAML frontmatter (must be stripped during adaptation)
+- [ ] `agents-manifest.json` entries match actual files in `.claude/agents/`
+- [ ] Orchestrator agent's "Available Specialist Agents" section lists only installed agents
+- [ ] Each external agent file contains the protocol adherence header
+- [ ] Conflict resolutions (if any) are documented in `decisions.json`
 
 ### 4.5: Final Report
 
@@ -661,7 +887,7 @@ The most critical state file. Always reflects the agent's current position. Upda
 | `schema` | string | Always "checkpoint-v1" |
 | `lastUpdated` | ISO-8601 | When this checkpoint was last saved |
 | `sessionId` | string | Unique identifier for the current session |
-| `currentAgent` | enum | `orchestrator` \| `developer` \| `reviewer` |
+| `currentAgent` | string | Agent slug: `orchestrator`, `developer`, `reviewer`, or any external agent slug |
 | `currentTicket` | string | Ticket key being worked on |
 | `phase` | enum | `planning` \| `research` \| `implement` \| `test` \| `review` |
 | `plan` | object | The approved execution plan |
@@ -747,6 +973,64 @@ Architectural decisions in ADR-lite format.
 }
 ```
 
+### agents-manifest.json
+
+Tracks which external agents are installed, their source, and version. Used for update detection.
+
+```json
+{
+  "schema": "agents-manifest-v1",
+  "source": "msitarzewski/agency-agents",
+  "installedAt": "2024-01-15T14:30:00Z",
+  "baseCommit": "4e905cff2b3a1d8f9c7e6a5b4d3c2f1e0a9b8c7d",
+  "lastUpdateCheck": "2024-01-15",
+  "agents": [
+    {
+      "slug": "frontend-developer",
+      "name": "Frontend Developer",
+      "file": ".claude/agents/frontend-developer.md",
+      "division": "engineering",
+      "sourceFile": "engineering/engineering-frontend-developer.md",
+      "commitSha": "4e905cff2b3a1d8f9c7e6a5b4d3c2f1e0a9b8c7d",
+      "installedAt": "2024-01-15T14:30:00Z",
+      "lastChecked": "2024-01-15T14:30:00Z",
+      "conflictResolutions": []
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schema` | string | Always "agents-manifest-v1" |
+| `source` | string | Repository identifier (owner/repo) |
+| `installedAt` | ISO-8601 | When the manifest was first created |
+| `baseCommit` | string | Full SHA of main branch at install time |
+| `lastUpdateCheck` | date | Last date an update check was performed |
+| `agents[]` | array | List of installed external agents |
+| `agents[].slug` | string | Filename slug (without .md extension) |
+| `agents[].name` | string | Human-readable agent name |
+| `agents[].file` | string | Relative path to installed agent file |
+| `agents[].division` | string | Source division in the catalog |
+| `agents[].sourceFile` | string | Path within the source repository |
+| `agents[].commitSha` | string | Full SHA when this agent was fetched |
+| `agents[].installedAt` | ISO-8601 | When this agent was installed |
+| `agents[].lastChecked` | ISO-8601 | When this agent was last checked for updates |
+| `agents[].conflictResolutions` | array | Conflict resolutions applied to this agent |
+
+**Initial state** (created during Step 2.4.1):
+
+```json
+{
+  "schema": "agents-manifest-v1",
+  "source": "msitarzewski/agency-agents",
+  "installedAt": null,
+  "baseCommit": null,
+  "lastUpdateCheck": null,
+  "agents": []
+}
+```
+
 ---
 
 ## Appendix C: Hook Scripts Reference
@@ -805,6 +1089,21 @@ fi
 if [ -f "$PROGRESS" ]; then
   IN_PROGRESS=$(jq '.features | map(select(.status == "in_progress" or .status == "blocked"))' "$PROGRESS")
   OUTPUT=$(echo "$OUTPUT" | jq --argjson features "$IN_PROGRESS" '. + {activeFeatures: $features}')
+fi
+
+# Check for agent catalog updates (non-blocking, optional)
+MANIFEST="${STATE_DIR}/agents-manifest.json"
+if [ -f "$MANIFEST" ] && [ "$(jq -r '.baseCommit // empty' "$MANIFEST")" != "" ]; then
+  LAST_CHECK=$(jq -r '.lastUpdateCheck // "1970-01-01"' "$MANIFEST")
+  TODAY=$(date -u +"%Y-%m-%d")
+  if [ "$LAST_CHECK" != "$TODAY" ]; then
+    STORED_SHA=$(jq -r '.baseCommit' "$MANIFEST")
+    LATEST_SHA=$(curl -sf --max-time 5 "https://api.github.com/repos/msitarzewski/agency-agents/commits?per_page=1&sha=main" | jq -r '.[0].sha // empty' 2>/dev/null || echo "")
+    if [ -n "$LATEST_SHA" ] && [ "$LATEST_SHA" != "$STORED_SHA" ]; then
+      OUTPUT=$(echo "$OUTPUT" | jq '. + {agentCatalogUpdate: "New agent versions available. Run update check to see details."}')
+    fi
+    jq --arg ts "$TODAY" '.lastUpdateCheck = $ts' "$MANIFEST" > "${MANIFEST}.tmp" 2>/dev/null && mv "${MANIFEST}.tmp" "$MANIFEST" 2>/dev/null || true
+  fi
 fi
 
 # Output context for Claude
@@ -1277,14 +1576,248 @@ Rules:
 
 ---
 
+## Appendix G: External Agent Integration Reference
+
+### G.1: Agent Adaptation Template
+
+When an external agent is fetched from the catalog, apply this transformation:
+
+**Step 1 — Strip YAML frontmatter:**
+
+Remove everything between the opening `---` and closing `---` delimiters (inclusive). Extract these fields before removing:
+- `name` → used for the agent title
+- `description` → used as subtitle
+- `services` → preserved as a section if present
+
+Fields that are **discarded** (cosmetic, not functional for Claude Code):
+- `color`, `emoji`, `vibe`, `tools`
+
+**Step 2 — Prepend protocol adherence header:**
+
+```markdown
+# Agent: {name}
+
+> **Source**: msitarzewski/agency-agents/{division}/{filename}
+> **Version**: {commit_sha_short} ({fetch_date})
+> **Harness Protocol**: This agent operates under the AI Harness v3 protocols
+> defined in `.claude/CLAUDE.md`. All operational rules (Autonomy Model, Context
+> Handoff, Commit Discipline, Verification) are inherited from there.
+
+---
+
+{description}
+
+```
+
+**Step 3 — Add required Claude Code agent sections:**
+
+After the header and before the original body, insert these synthesized sections:
+
+```markdown
+## When to Use
+{Synthesized from the agent's "Core Mission" section — describe scenarios where this agent should be invoked}
+
+## Capabilities
+{Extracted from the agent's mission/deliverables — list what this agent can do}
+
+## Constraints
+- MUST NOT auto-commit (commits are user decisions)
+- MUST work within the scope approved in the plan
+- MUST pause for: ambiguities, unplanned architecture decisions, blockers, scope changes
+- MUST NOT mark tickets as done (Reviewer does verification)
+- MUST NOT modify state files manually (hooks handle checkpoint.json)
+{Add any agent-specific constraints from its "Critical Rules" section}
+```
+
+**Step 4 — Preserve original body:**
+
+Append the full original Markdown body (everything after the YAML frontmatter) unchanged. This preserves the agent's:
+- Identity & personality
+- Core mission details
+- Domain-specific rules
+- Technical deliverables and templates
+- Communication style
+- Success metrics
+
+**Step 5 — Append services section (if applicable):**
+
+If the original agent had a `services` field in frontmatter:
+
+```markdown
+---
+
+## External Services
+
+| Service | URL | Tier |
+|---------|-----|------|
+| {name} | {url} | {tier} |
+```
+
+### G.2: Conflict Detection Logic
+
+**Keyword overlap analysis:**
+
+For each pair of selected agents, compare the keywords in their "Core Mission" or primary responsibility sections:
+
+```
+overlap_score = (shared_keywords / total_unique_keywords) * 100
+
+If overlap_score > 40%: FLAG as potential overlap (present to user)
+If overlap_score > 70%: FLAG as definite conflict (require resolution)
+```
+
+**Conflict resolution options:**
+
+| Option | When to use | Result |
+|--------|-------------|--------|
+| Keep both (scoped) | Clear scope boundary exists | Both installed, scope documented in header |
+| Merge | One agent is strictly superior | Stronger agent installed, weaker skipped |
+| Replace canonical | External is more complete than harness canonical | External replaces Developer/Reviewer |
+| Skip external | Canonical is sufficient | External not installed |
+
+**Resolution documentation:**
+
+Each resolution is recorded in `decisions.json`:
+
+```json
+{
+  "id": "auto-generated",
+  "title": "Agent conflict resolution: {Agent A} vs {Agent B}",
+  "date": "{today}",
+  "status": "accepted",
+  "context": "Both agents handle {overlapping area}",
+  "decision": "{chosen option}: {rationale}",
+  "consequences": "{what this means for the workflow}",
+  "alternatives": ["{other options that were available}"],
+  "relatedTickets": []
+}
+```
+
+### G.3: Versioning & Update Protocol
+
+**Version tracking:** Each installed agent's version is tracked by commit SHA in `agents-manifest.json` (see Appendix B).
+
+**Update detection flow:**
+
+```
+┌─────────────────────────────────────────────┐
+│ 1. Session starts → hook checks manifest    │
+│    Compare stored baseCommit vs latest       │
+│    on main branch (lightweight, <5s)         │
+├─────────────────────────────────────────────┤
+│ 2. If different → flag in session context:  │
+│    "Agent catalog has updates available"     │
+├─────────────────────────────────────────────┤
+│ 3. User (or Orchestrator) requests update   │
+│    check → deep check each installed agent  │
+├─────────────────────────────────────────────┤
+│ 4. For each agent with changes:             │
+│    - Fetch new version                      │
+│    - Re-apply adaptation template           │
+│    - Preserve user customizations (ask)     │
+│    - Update manifest with new SHA           │
+├─────────────────────────────────────────────┤
+│ 5. If no changes needed → update            │
+│    lastUpdateCheck timestamp only           │
+└─────────────────────────────────────────────┘
+```
+
+**Update presentation format:**
+
+```
+Agent catalog update available ({N} agents changed):
+
+Updated:
+ 1. Frontend Developer: {old_sha_short} → {new_sha_short} ({days} days newer)
+ 2. Code Reviewer: {old_sha_short} → {new_sha_short} ({days} days newer)
+
+Unchanged:
+ 3. DevOps Automator: up to date
+ 4. Software Architect: up to date
+
+Options:
+ a) Update all changed agents (re-applies adaptation, preserves protocol headers)
+ b) Update selectively (choose which agents to update)
+ c) Skip (check again next session)
+ d) Disable automatic update checks
+```
+
+**User customization handling:**
+
+If a user has modified an installed agent file after installation:
+1. Detect modification by comparing file hash or checking git status
+2. Ask user: "This agent has local modifications. Update will overwrite them. Options: (a) Update and lose local changes, (b) Skip this agent, (c) Show diff between local and new version"
+
+### G.4: Orchestrator Adaptation Details
+
+The Orchestrator from `specialized/agents-orchestrator.md` requires specific adaptations beyond the standard template:
+
+**Mappings:**
+
+| External Orchestrator concept | Harness equivalent |
+|---|---|
+| `project-tasks/*-tasklist.md` | `.claude/tickets/{PREFIX}-*.json` |
+| `project-specs/` | Ticket `acceptanceCriteria` field |
+| Task status tracking | `progress.json` features array |
+| Pipeline phases | Developer → Reviewer cycle |
+| "Development-QA Loop" | Developer implements → Reviewer verifies |
+| Agent spawn instructions | Reference installed agent slugs from manifest |
+
+**Required modifications to the Orchestrator body:**
+
+1. Replace all references to file-based task lists with ticket JSON references
+2. Add a "## Available Specialist Agents" section listing installed agents:
+   ```markdown
+   ## Available Specialist Agents
+   
+   These agents are installed and available for task assignment:
+   
+   | Agent | Slug | Specialty |
+   |-------|------|-----------|
+   | Frontend Developer | `frontend-developer` | React/Vue, UI, performance |
+   | DevOps Automator | `devops-automator` | CI/CD, infrastructure |
+   | ... | ... | ... |
+   
+   Invoke with: "Use the {slug} agent for this task"
+   ```
+3. Ensure it references `progress.json` and `decisions.json` for state management
+4. Add the harness PAUSE conditions to its autonomy section
+
+### G.5: Adding Agents Post-Installation
+
+Users can add agents after the initial harness generation:
+
+1. Run Phase 1.5 steps manually (fetch catalog, select agent, check conflicts)
+2. Fetch and adapt the new agent (Step 2.4.1 process)
+3. Update `agents-manifest.json` with the new entry
+4. Update the "Installed Agents" section in `.claude/CLAUDE.md`
+5. Update the Orchestrator's "Available Specialist Agents" section
+6. Run Phase 4 verification checks for consistency
+
+This can be triggered by the user saying: "Add the {agent name} agent to this project" or "Recommend more agents for this project."
+
+### G.6: Removing Agents
+
+To remove an installed external agent:
+
+1. Delete the agent file from `.claude/agents/{slug}.md`
+2. Remove its entry from `agents-manifest.json`
+3. Remove it from the "Installed Agents" section in `.claude/CLAUDE.md`
+4. Remove it from the Orchestrator's "Available Specialist Agents" section
+5. Record the removal in `decisions.json` (with rationale)
+
+---
+
 ## Summary
 
 This manual enables any AI agent to:
 1. **Analyze** a software project's stack, complexity, and architecture
-2. **Generate** a complete harness within `.claude/` leveraging native Claude Code infrastructure
-3. **Configure** hooks for automatic, invisible checkpointing
-4. **Initialize** JSON state files for reliable, corruption-resistant persistence
-5. **Define** three specialized agents (Orchestrator, Developer, Reviewer) for the plan-build-verify cycle
-6. **Verify** the harness is correct and functional
+2. **Select** relevant specialist agents from an external catalog, tailored to the project's needs
+3. **Generate** a complete harness within `.claude/` leveraging native Claude Code infrastructure
+4. **Adapt** external agents to follow harness protocols while preserving their specialized expertise
+5. **Configure** hooks for automatic, invisible checkpointing and agent update detection
+6. **Initialize** JSON state files for reliable, corruption-resistant persistence
+7. **Detect** conflicts between agents and resolve with user input
+8. **Verify** the harness is correct and functional
 
-The harness then serves as the persistent infrastructure that makes long-running, multi-session AI development possible — solving the fundamental problem of agents with no memory between context windows, while leveraging Claude Code's native capabilities for maximum integration.
+The harness then serves as the persistent infrastructure that makes long-running, multi-session AI development possible — solving the fundamental problem of agents with no memory between context windows, while leveraging Claude Code's native capabilities for maximum integration. External agents extend the harness's capabilities without compromising its governance protocols.
